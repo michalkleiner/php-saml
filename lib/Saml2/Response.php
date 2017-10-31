@@ -1089,7 +1089,30 @@ class OneLogin_Saml2_Response
 
             $container->replaceChild($decrypted, $encryptedAssertion);
 
-            return $decrypted->ownerDocument;
+            // RealMe edit:
+            // Unfortunately either RealMe produces invalid XML-DSig signatures, or there's a bug in PHP's DOM* classes
+            // or xmlseclib that mangle XML namespaces. This prevents the XML value from having it's signature digest
+            // verified later on.
+            // Here, we de-mangle the XML and manually replace the broken tag (it defines, but does not use the saml2
+            // namespace, when it should in fact use the saml2 NS to pass signature validation)
+            $xml = $decrypted->ownerDocument->saveXML();
+
+            $search = [
+                '<saml:NameID xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion"',
+                "</saml:NameID>\n"
+            ];
+
+            $replace = [
+                '<saml2:NameID xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion"',
+                "</saml2:NameID>\n"
+            ];
+
+            $xml = str_replace($search, $replace, $xml);
+
+            $decrypted = new DOMDocument();
+            $decrypted->loadXML($xml);
+
+            return $decrypted;
         }
     }
 
